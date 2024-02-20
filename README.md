@@ -105,6 +105,9 @@
     - 配置自定义接口地址（可选） `GOOGLE_BASE_URL`，可以使用我的这个项目搭建一个基于 vercel 的代理服务：[google-gemini-vercel-proxy](https://github.com/Hk-Gosuto/google-gemini-vercel-proxy)
   - 常见问题参考：[Gemini Prompting FAQs](https://js.langchain.com/docs/integrations/chat/google_generativeai#gemini-prompting-faqs)
   - gemini-pro-vision 模型需要配置对象存储服务，请参考 [对象存储服务配置指南](./docs/s3-oss.md) 配置
+  - ⚠ gemini-pro-vision 注意事项 https://github.com/Hk-Gosuto/ChatGPT-Next-Web-LangChain/issues/203 ：
+    - 每次对话必须包含图像数据，不然会出现 `Add an image to use models/gemini-pro-vision, or switch your model to a text model.` 错误。
+    - 只支持单轮对话，多轮对话会出现 `Multiturn chat is not enabled for models/gemini-pro-vision` 错误。
   
 - 非 Vercel 运行环境下支持本地存储
 
@@ -232,6 +235,13 @@ Azure 密钥。
 
 Azure Api 版本，你可以在这里找到：[Azure 文档](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference#chat-completions)。
 
+### `NEXT_PUBLIC_DISABLE_AUTOGENERATETITLE` （可选）
+
+如果你不想让用户使用自动生成标题功能，将此环境变量设置为 1 即可。
+
+### `NEXT_PUBLIC_DISABLE_SENDMEMORY` （可选）
+
+如果你不想让用户使用历史摘要功能，将此环境变量设置为 1 即可。
 
 ## 部署
 
