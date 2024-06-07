@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { showToast } from "./components/ui-lib";
 import Locale from "./locales";
-import { RequestMessage } from "./client/api";
-import { DEFAULT_MODELS } from "./constant";
+import { ClientApi, RequestMessage } from "./client/api";
+import { DEFAULT_MODELS, ModelProvider } from "./constant";
+import { identifyDefaultClaudeModel } from "./utils/checkers";
+import { useAccessStore } from "./store";
 
 export function trimTopic(topic: string) {
   // Fix an issue where double quotes still show in the Indonesian language
@@ -278,4 +280,19 @@ export function isSupportRAGModel(modelName: string) {
   return DEFAULT_MODELS.filter((model) => model.provider.id === "openai").some(
     (model) => model.name === modelName,
   );
+}
+
+export function getClientApi(modelName: string): ClientApi {
+  const accessStore = useAccessStore.getState();
+  if (accessStore.useOpenAIEndpointForAllModels())
+    return new ClientApi(ModelProvider.GPT);
+  var api: ClientApi;
+  if (modelName.startsWith("gemini")) {
+    api = new ClientApi(ModelProvider.GeminiPro);
+  } else if (identifyDefaultClaudeModel(modelName)) {
+    api = new ClientApi(ModelProvider.Claude);
+  } else {
+    api = new ClientApi(ModelProvider.GPT);
+  }
+  return api;
 }
