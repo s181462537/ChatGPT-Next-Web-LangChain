@@ -230,10 +230,13 @@ export class ClientApi {
 export function getHeaders(ignoreHeaders?: boolean) {
   const accessStore = useAccessStore.getState();
   const chatStore = useChatStore.getState();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
+  let headers: Record<string, string> = {};
+  if (!ignoreHeaders) {
+    headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+  }
 
   const clientConfig = getClientConfig();
 
@@ -257,6 +260,18 @@ export function getHeaders(ignoreHeaders?: boolean) {
             : isAlibaba
               ? accessStore.alibabaApiKey
               : accessStore.openaiApiKey;
+    if (accessStore.isUseOpenAIEndpointForAllModels) {
+      return {
+        isGoogle: false,
+        isAzure: false,
+        isAnthropic: false,
+        isBaidu: false,
+        isByteDance: false,
+        isAlibaba: false,
+        apiKey: accessStore.openaiApiKey,
+        isEnabledAccessControl,
+      };
+    }
     return {
       isGoogle,
       isAzure,
@@ -311,6 +326,10 @@ export function getHeaders(ignoreHeaders?: boolean) {
 }
 
 export function getClientApi(provider: ServiceProvider): ClientApi {
+  const accessStore = useAccessStore.getState();
+  if (accessStore.isUseOpenAIEndpointForAllModels) {
+    return new ClientApi(ModelProvider.GPT);
+  }
   switch (provider) {
     case ServiceProvider.Google:
       return new ClientApi(ModelProvider.GeminiPro);
