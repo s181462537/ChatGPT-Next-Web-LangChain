@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
 import { showToast } from "./components/ui-lib";
-import Locale from "./locales";
+import Locale, { getLang } from "./locales";
 import { RequestMessage } from "./client/api";
-import { DEFAULT_MODELS } from "./constant";
+import {
+  DEFAULT_MODELS,
+  REQUEST_TIMEOUT_MS,
+  REQUEST_TIMEOUT_MS_FOR_THINKING,
+} from "./constant";
 import { ServiceProvider } from "./constant";
 // import { fetch as tauriFetch, ResponseType } from "@tauri-apps/api/http";
 import { fetch as tauriStreamFetch } from "./utils/stream";
+import {
+  WEB_SEARCH_ANSWER_EN_PROMPT,
+  WEB_SEARCH_ANSWER_ZH_PROMPT,
+} from "./prompt";
 
 export function trimTopic(topic: string) {
   // Fix an issue where double quotes still show in the Indonesian language
@@ -227,6 +235,36 @@ export function isMacOS(): boolean {
   return false;
 }
 
+export function getWebReferenceMessageTextContent(message: RequestMessage) {
+  let prompt = getMessageTextContent(message);
+  if (
+    message.webSearchReferences &&
+    message.webSearchReferences.results.length > 0
+  ) {
+    const searchResults = message.webSearchReferences.results
+      .map((result, index) => {
+        return `[webpage ${index + 1} begin]
+[webpage title]${result.title}
+[webpage url]${result.url}
+[webpage content begin]
+${result.content}
+[webpage content end]
+[webpage ${index + 1} end]
+`;
+      })
+      .join("\n");
+    const isZh = getLang() == "cn";
+    const promptTemplate = isZh
+      ? WEB_SEARCH_ANSWER_ZH_PROMPT
+      : WEB_SEARCH_ANSWER_EN_PROMPT;
+    prompt = promptTemplate
+      .replace("{cur_date}", new Date().toLocaleString())
+      .replace("{search_results}", searchResults)
+      .replace("{question}", prompt);
+  }
+  return prompt;
+}
+
 export function getMessageTextContent(message: RequestMessage) {
   if (typeof message.content === "string") {
     return message.content;
@@ -285,6 +323,8 @@ export function isVisionModel(model: string) {
     "gemini-exp-1114",
     "gpt-4o",
     "gpt-4o-mini",
+    "gpt-4.5-preview",
+    "gpt-4.5-preview-2025-02-27",
   ];
 
   var googleModels = DEFAULT_MODELS.filter(
@@ -304,6 +344,20 @@ export function isVisionModel(model: string) {
 
 export function isDalle3(model: string) {
   return "dall-e-3" === model;
+}
+
+export function getTimeoutMSByModel(model: string) {
+  model = model.toLowerCase();
+  if (
+    model.startsWith("dall-e") ||
+    model.startsWith("dalle") ||
+    model.startsWith("o1") ||
+    model.startsWith("o3") ||
+    model.includes("deepseek-r") ||
+    model.includes("-thinking")
+  )
+    return REQUEST_TIMEOUT_MS_FOR_THINKING;
+  return REQUEST_TIMEOUT_MS;
 }
 
 export function showPlugins(provider: ServiceProvider, model: string) {
@@ -332,6 +386,8 @@ export function isSupportRAGModel(modelName: string) {
     "gpt-4o-2024-05-13",
     "gpt-4o-mini",
     "gpt-4o-mini-2024-07-18",
+    "gpt-4.5-preview",
+    "gpt-4.5-preview-2025-02-27",
   ];
   if (specialModels.some((keyword) => modelName === keyword)) return true;
   if (isVisionModel(modelName)) return false;
@@ -360,6 +416,8 @@ export function isFunctionCallModel(modelName: string) {
     "gpt-4o-mini-2024-07-18",
     "gpt-4-turbo-2024-04-09",
     "gpt-4-1106-preview",
+    "gpt-4.5-preview",
+    "gpt-4.5-preview-2025-02-27",
     "claude-3-sonnet-20240229",
     "claude-3-opus-20240229",
     "claude-3-haiku-20240307",
@@ -367,11 +425,21 @@ export function isFunctionCallModel(modelName: string) {
     "claude-3-5-sonnet-20241022",
     "claude-3-5-sonnet-latest",
     "claude-3-5-haiku-latest",
+    "claude-3-7-sonnet-20250219",
+    "claude-3-7-sonnet-latest",
   ];
   if (specialModels.some((keyword) => modelName === keyword)) return true;
   return DEFAULT_MODELS.filter(
     (model) => model.provider.id === "openai" && !model.name.includes("o1"),
   ).some((model) => model.name === modelName);
+}
+
+export function isClaudeThinkingModel(modelName: string) {
+  const specialModels = [
+    "claude-3-7-sonnet-20250219",
+    "claude-3-7-sonnet-latest",
+  ];
+  return specialModels.some((keyword) => modelName === keyword);
 }
 
 export function fetch(

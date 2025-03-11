@@ -33,8 +33,10 @@ import { ModelConfig, ModelType, useAppConfig } from "./config";
 import { useAccessStore } from "./access";
 import { collectModelsWithDefaultModel } from "../utils/model";
 import { createEmptyMask, Mask } from "./mask";
-import { FileInfo } from "../client/platforms/utils";
+import { FileInfo, WebApi } from "../client/platforms/utils";
 import { usePluginStore } from "./plugin";
+import { TavilySearchResponse } from "@tavily/core";
+import { MYFILES_BROWSER_TOOLS_SYSTEM_PROMPT } from "../prompt";
 
 export interface ChatToolMessage {
   toolName: string;
@@ -64,7 +66,7 @@ export type ChatMessage = RequestMessage & {
   id: string;
   model?: ModelType;
   tools?: ChatMessageTool[];
-  audio_url?: string;
+  audioUrl?: string;
 };
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
@@ -383,9 +385,11 @@ export const useChatStore = createPersistStore(
         content: string,
         attachImages?: string[],
         attachFiles?: FileInfo[],
+        webSearchReference?: TavilySearchResponse,
       ) {
         const session = get().currentSession();
         const modelConfig = session.mask.modelConfig;
+        const accessStore = useAccessStore.getState();
 
         const userContent = fillTemplateWith(content, modelConfig);
         console.log("[User Input] after template: ", userContent);
@@ -413,6 +417,7 @@ export const useChatStore = createPersistStore(
           role: "user",
           content: mContent,
           fileInfos: attachFiles,
+          webSearchReferences: webSearchReference,
         });
 
         const botMessage: ChatMessage = createMessage({
@@ -534,6 +539,16 @@ export const useChatStore = createPersistStore(
           };
           agentCall();
         } else {
+          if (session.mask.webSearch && accessStore.enableWebSearch()) {
+            botMessage.content = Locale.Chat.Searching;
+            get().updateTargetSession(session, (session) => {
+              session.messages = session.messages.concat();
+            });
+            const webApi = new WebApi();
+            const webSearchReference = await webApi.search(content);
+            userMessage.webSearchReferences = webSearchReference;
+            botMessage.webSearchReferences = webSearchReference;
+          }
           // make request
           api.llm.chat({
             messages: sendMessages,
@@ -542,6 +557,15 @@ export const useChatStore = createPersistStore(
               botMessage.streaming = true;
               if (message) {
                 botMessage.content = message;
+              }
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
+              });
+            },
+            onReasoningUpdate(message) {
+              botMessage.streaming = true;
+              if (message) {
+                botMessage.reasoningContent = message;
               }
               get().updateTargetSession(session, (session) => {
                 session.messages = session.messages.concat();
@@ -634,13 +658,23 @@ export const useChatStore = createPersistStore(
             session.mask.modelConfig.model.startsWith("chatgpt-"));
 
         var systemPrompts: ChatMessage[] = [];
+        var template = DEFAULT_SYSTEM_TEMPLATE;
+        if (session.attachFiles && session.attachFiles.length > 0) {
+          template += MYFILES_BROWSER_TOOLS_SYSTEM_PROMPT;
+          session.attachFiles.forEach((file) => {
+            template += `filename: \`${file.originalFilename}\`
+partialDocument: \`\`\`
+${file.partial}
+\`\`\``;
+          });
+        }
         systemPrompts = shouldInjectSystemPrompts
           ? [
               createMessage({
                 role: "system",
                 content: fillTemplateWith("", {
                   ...modelConfig,
-                  template: DEFAULT_SYSTEM_TEMPLATE,
+                  template: template,
                 }),
               }),
             ]

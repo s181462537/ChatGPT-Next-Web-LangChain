@@ -25,6 +25,9 @@ const en: LocaleType = {
   },
   Chat: {
     SubTitle: (count: number) => `${count} messages`,
+    Thinking: {
+      Title: "Thinking",
+    },
     EditMessage: {
       Title: "Edit All Messages",
       Topic: {
@@ -75,9 +78,14 @@ const en: LocaleType = {
       DisablePlugins: "Disable Plugins",
       UploadImage: "Upload Images",
       UploadFle: "Upload Files",
+      OpenWebSearch: "Enable Web Search",
+      CloseWebSearch: "Disable Web Search",
+      EnableThinking: "Enable Thinking",
+      DisableThinking: "Disable Thinking",
     },
     Rename: "Rename Chat",
     Typing: "Typing…",
+    Searching: "Searching…",
     Input: (submitKey: string) => {
       var inputHints = `${submitKey} to send`;
       if (submitKey === String(SubmitKey.Enter)) {
@@ -546,6 +554,11 @@ const en: LocaleType = {
     MaxTokens: {
       Title: "Max Tokens",
       SubTitle: "Maximum length of input tokens and generated tokens",
+    },
+    BudgetTokens: {
+      Title: "Budget Tokens",
+      SubTitle:
+        "The budget_tokens parameter determines the maximum number of tokens Claude is allowed use for its internal reasoning process. budget_tokens must always be less than the max_tokens specified.",
     },
     PresencePenalty: {
       Title: "Presence Penalty",

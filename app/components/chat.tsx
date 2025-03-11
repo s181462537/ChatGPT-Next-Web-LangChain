@@ -52,6 +52,10 @@ import PluginIcon from "../icons/plugin.svg";
 import ShortcutkeyIcon from "../icons/shortcutkey.svg";
 import ReloadIcon from "../icons/reload.svg";
 import HeadphoneIcon from "../icons/headphone.svg";
+import SearchCloseIcon from "../icons/search_close.svg";
+import SearchOpenIcon from "../icons/search_open.svg";
+import EnableThinkingIcon from "../icons/thinking_enable.svg";
+import DisableThinkingIcon from "../icons/thinking_disable.svg";
 import {
   ChatMessage,
   SubmitKey,
@@ -80,6 +84,7 @@ import {
   isSupportRAGModel,
   isFunctionCallModel,
   isFirefox,
+  isClaudeThinkingModel,
 } from "../utils";
 
 import { uploadImage as uploadImageRemote } from "@/app/utils/chat";
@@ -142,6 +147,7 @@ import {
   WebTranscriptionApi,
 } from "../utils/speech";
 import { FileInfo } from "../client/platforms/utils";
+import { ThinkingContent } from "./thinking-content";
 
 const ttsPlayer = createTTSPlayer();
 
@@ -509,6 +515,25 @@ export function ChatActions(props: {
   const pluginStore = usePluginStore();
   const session = chatStore.currentSession();
 
+  // switch thinking mode
+  const claudeThinking = chatStore.currentSession().mask.claudeThinking;
+  function switchClaudeThinking() {
+    chatStore.updateTargetSession(session, (session) => {
+      session.mask.claudeThinking = !session.mask.claudeThinking;
+    });
+  }
+
+  // switch web search
+  const webSearch = chatStore.currentSession().mask.webSearch;
+  function switchWebSearch() {
+    chatStore.updateTargetSession(session, (session) => {
+      session.mask.webSearch =
+        !session.mask.webSearch &&
+        !isFunctionCallModel(currentModel) &&
+        isEnableWebSearch;
+    });
+  }
+
   // switch Plugins
   const usePlugins = chatStore.currentSession().mask.usePlugins;
   function switchUsePlugins() {
@@ -590,6 +615,11 @@ export function ChatActions(props: {
   );
   const isDisableModelProviderDisplay = useMemo(
     () => accessStore.isDisableModelProviderDisplay(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const isEnableWebSearch = useMemo(
+    () => accessStore.enableWebSearch(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -723,6 +753,32 @@ export function ChatActions(props: {
           text={currentModelName}
           icon={<RobotIcon />}
         />
+
+        {!isFunctionCallModel(currentModel) && isEnableWebSearch && (
+          <ChatAction
+            onClick={switchWebSearch}
+            text={
+              webSearch
+                ? Locale.Chat.InputActions.CloseWebSearch
+                : Locale.Chat.InputActions.OpenWebSearch
+            }
+            icon={webSearch ? <SearchOpenIcon /> : <SearchCloseIcon />}
+          />
+        )}
+
+        {isClaudeThinkingModel(currentModel) && (
+          <ChatAction
+            onClick={switchClaudeThinking}
+            text={
+              claudeThinking
+                ? Locale.Chat.InputActions.DisableThinking
+                : Locale.Chat.InputActions.EnableThinking
+            }
+            icon={
+              claudeThinking ? <EnableThinkingIcon /> : <DisableThinkingIcon />
+            }
+          />
+        )}
 
         {showModelSelector && (
           <SearchSelector
@@ -1351,7 +1407,12 @@ function _Chat() {
     const textContent = getMessageTextContent(userMessage);
     const images = getMessageImages(userMessage);
     chatStore
-      .onUserInput(textContent, images, userMessage.fileInfos)
+      .onUserInput(
+        textContent,
+        images,
+        userMessage.fileInfos,
+        userMessage.webSearchReferences,
+      )
       .then(() => setIsLoading(false));
     inputRef.current?.focus();
   };
@@ -1432,34 +1493,36 @@ function _Chat() {
 
   // preview messages
   const renderMessages = useMemo(() => {
-    return context
-      .concat(session.messages as RenderMessage[])
-      .concat(
-        isLoading
-          ? [
-              {
-                ...createMessage({
-                  role: "assistant",
-                  content: "……",
-                }),
-                preview: true,
-              },
-            ]
-          : [],
-      )
-      .concat(
-        userInput.length > 0 && config.sendPreviewBubble
-          ? [
-              {
-                ...createMessage({
-                  role: "user",
-                  content: userInput,
-                }),
-                preview: true,
-              },
-            ]
-          : [],
-      );
+    return (
+      context
+        .concat(session.messages as RenderMessage[])
+        // .concat(
+        //   isLoading
+        //     ? [
+        //       {
+        //         ...createMessage({
+        //           role: "assistant",
+        //           content: "……",
+        //         }),
+        //         preview: true,
+        //       },
+        //     ]
+        //     : [],
+        // )
+        .concat(
+          userInput.length > 0 && config.sendPreviewBubble
+            ? [
+                {
+                  ...createMessage({
+                    role: "user",
+                    content: userInput,
+                  }),
+                  preview: true,
+                },
+              ]
+            : [],
+        )
+    );
   }, [
     config.sendPreviewBubble,
     context,
@@ -2089,10 +2152,12 @@ function _Chat() {
                             ))}
                           </div>
                         )}
+                        {!isUser && <ThinkingContent message={message} />}
                         <div className={styles["chat-message-item"]}>
                           <Markdown
                             key={message.streaming ? "loading" : "done"}
                             content={getMessageTextContent(message)}
+                            webSearchReferences={message.webSearchReferences}
                             loading={
                               (message.preview || message.streaming) &&
                               message.content.length === 0 &&
@@ -2140,9 +2205,9 @@ function _Chat() {
                             </div>
                           )}
                         </div>
-                        {message?.audio_url && (
+                        {message?.audioUrl && (
                           <div className={styles["chat-message-audio"]}>
-                            <audio src={message.audio_url} controls />
+                            <audio src={message.audioUrl} controls />
                           </div>
                         )}
 
