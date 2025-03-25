@@ -10,7 +10,8 @@ import React, {
 } from "react";
 
 import SendWhiteIcon from "../icons/send-white.svg";
-import VoiceWhiteIcon from "../icons/voice-white.svg";
+import VoiceOpenIcon from "../icons/voice-open.svg";
+import VoiceCloseIcon from "../icons/voice-close.svg";
 import BrainIcon from "../icons/brain.svg";
 import RenameIcon from "../icons/rename.svg";
 import ExportIcon from "../icons/share.svg";
@@ -211,7 +212,11 @@ export function SessionConfigModel(props: { onClose: () => void }) {
               <ListItem
                 className="copyable"
                 title={`${Locale.Memory.Title} (${session.lastSummarizeIndex} of ${session.messages.length})`}
-                subTitle={session.memoryPrompt || Locale.Memory.EmptyContent}
+                subTitle={
+                  typeof session.memoryPrompt === "string"
+                    ? session.memoryPrompt || Locale.Memory.EmptyContent
+                    : Locale.Memory.EmptyContent
+                }
               ></ListItem>
             ) : (
               <></>
@@ -1210,6 +1215,7 @@ function _Chat() {
 
   const startListening = async () => {
     if (speechApi) {
+      showToast(Locale.Settings.STT.StartListening);
       await speechApi.start();
       setIsListening(true);
     }
@@ -1219,6 +1225,7 @@ function _Chat() {
     if (speechApi) {
       if (config.sttConfig.engine !== DEFAULT_STT_ENGINE)
         setIsTranscription(true);
+      showToast(Locale.Settings.STT.StopListening);
       await speechApi.stop();
       setIsListening(false);
     }
@@ -2154,55 +2161,106 @@ function _Chat() {
                         )}
                         {!isUser && <ThinkingContent message={message} />}
                         <div className={styles["chat-message-item"]}>
-                          <Markdown
-                            key={message.streaming ? "loading" : "done"}
-                            content={getMessageTextContent(message)}
-                            webSearchReferences={message.webSearchReferences}
-                            loading={
-                              (message.preview || message.streaming) &&
-                              message.content.length === 0 &&
-                              !isUser
-                            }
-                            //   onContextMenu={(e) => onRightClick(e, message)} // hard to use
-                            onDoubleClickCapture={() => {
-                              if (!isMobileScreen) return;
-                              setUserInput(getMessageTextContent(message));
-                            }}
-                            fontSize={fontSize}
-                            fontFamily={fontFamily}
-                            parentRef={scrollRef}
-                            defaultShow={i >= messages.length - 6}
-                          />
-                          {getMessageImages(message).length == 1 && (
-                            <img
-                              className={styles["chat-message-item-image"]}
-                              src={getMessageImages(message)[0]}
-                              alt=""
-                            />
-                          )}
-                          {getMessageImages(message).length > 1 && (
-                            <div
-                              className={styles["chat-message-item-images"]}
-                              style={
-                                {
-                                  "--image-count":
-                                    getMessageImages(message).length,
-                                } as React.CSSProperties
-                              }
-                            >
-                              {getMessageImages(message).map((image, index) => {
-                                return (
-                                  <img
-                                    className={
-                                      styles["chat-message-item-image-multi"]
+                          {Array.isArray(message.content) ? (
+                            message.content.map((content, index) => (
+                              <Fragment key={index}>
+                                {content.type === "text" && (
+                                  <Markdown
+                                    key={
+                                      message.streaming
+                                        ? "loading"
+                                        : `text-${index}`
                                     }
-                                    key={index}
-                                    src={image}
-                                    alt=""
+                                    content={content.text || ""}
+                                    webSearchReferences={
+                                      message.webSearchReferences
+                                    }
+                                    loading={
+                                      (message.preview || message.streaming) &&
+                                      !content.text &&
+                                      !isUser &&
+                                      (
+                                        message.content as MultimodalContent[]
+                                      ).every((c) => c.type === "text")
+                                    }
+                                    onDoubleClickCapture={() => {
+                                      if (!isMobileScreen) return;
+                                      setUserInput(content.text || "");
+                                    }}
+                                    fontSize={fontSize}
+                                    fontFamily={fontFamily}
+                                    parentRef={scrollRef}
+                                    defaultShow={i >= messages.length - 6}
                                   />
-                                );
-                              })}
-                            </div>
+                                )}
+                                {content.type === "image_url" &&
+                                  content.image_url?.url && (
+                                    <img
+                                      className={
+                                        styles["chat-message-item-image"]
+                                      }
+                                      src={content.image_url.url}
+                                      alt=""
+                                    />
+                                  )}
+                              </Fragment>
+                            ))
+                          ) : (
+                            <>
+                              <Markdown
+                                key={message.streaming ? "loading" : "done"}
+                                content={getMessageTextContent(message)}
+                                webSearchReferences={
+                                  message.webSearchReferences
+                                }
+                                loading={
+                                  (message.preview || message.streaming) &&
+                                  message.content.length === 0 &&
+                                  !isUser
+                                }
+                                onDoubleClickCapture={() => {
+                                  if (!isMobileScreen) return;
+                                  setUserInput(getMessageTextContent(message));
+                                }}
+                                fontSize={fontSize}
+                                fontFamily={fontFamily}
+                                parentRef={scrollRef}
+                                defaultShow={i >= messages.length - 6}
+                              />
+                              {getMessageImages(message).length == 1 && (
+                                <img
+                                  className={styles["chat-message-item-image"]}
+                                  src={getMessageImages(message)[0]}
+                                  alt=""
+                                />
+                              )}
+                              {getMessageImages(message).length > 1 && (
+                                <div
+                                  className={styles["chat-message-item-images"]}
+                                  style={
+                                    {
+                                      "--image-count":
+                                        getMessageImages(message).length,
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  {getMessageImages(message).map(
+                                    (image, index) => (
+                                      <img
+                                        className={
+                                          styles[
+                                            "chat-message-item-image-multi"
+                                          ]
+                                        }
+                                        key={index}
+                                        src={image}
+                                        alt=""
+                                      />
+                                    ),
+                                  )}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                         {message?.audioUrl && (
@@ -2328,9 +2386,21 @@ function _Chat() {
                     })}
                   </div>
                 )}
+                {config.sttConfig.enable && (
+                  <IconButton
+                    icon={isListening ? <VoiceCloseIcon /> : <VoiceOpenIcon />}
+                    className={styles["chat-input-stt"]}
+                    type="secondary"
+                    onClick={async () =>
+                      isListening
+                        ? await stopListening()
+                        : await startListening()
+                    }
+                    loding={isTranscription}
+                  />
+                )}
                 <IconButton
                   icon={<SendWhiteIcon />}
-                  text={Locale.Chat.Send}
                   className={styles["chat-input-send"]}
                   type="primary"
                   onClick={() => doSubmit(userInput)}
